@@ -393,8 +393,6 @@ def shrink_v4(channels, N=14, frame_length=882):
             frames = audio.frames.split(channel, frame_length, pad=True)
             tail = length % frame_length
             for i_frame, frame in enumerate(frames):
-                # TODO: stop the handling of the last frame, pad with zeros
-                last_frame = (i_frame == len(frames) - 1)
                 if count >= stop:
                     count = 0
                     progress = (i_channel + i_frame / len(frames)) / len(channels)
@@ -413,8 +411,6 @@ def shrink_v4(channels, N=14, frame_length=882):
                         codec = new_codec
                         frame = delta
                     i += 1
-                if last_frame and tail:
-                    frame = frame[:tail]
                 stream.write(i, audio.coders.rice(3, signed=False))
                 stream.write(codec.n, np.uint8)
                 stream.write(frame, codec)
@@ -426,34 +422,32 @@ def grow_v4(stream, N=14, frame_length=882):
     assert stream.read(str, 6) == "SHRINK"
     assert stream.read(np.uint8) == 4
     length = stream.read(np.uint32)
+    num_frames = (length // frame_length) + (length % frame_length != 0)
+    pad = num_frames * frame_length - length
     num_channels = stream.read(bool) + 1
-    channels = np.zeros((num_channels, length), dtype=np.int16)
+    channels = np.zeros((num_channels, length + pad), dtype=np.int16)
     count, stop = 0, 1
     for j in range(num_channels):
-        if np.size(channels[j]):
-            channel = np.zeros(0, dtype=np.int16)
-            samples_left = length
-            while samples_left:
+        channel = channels[j]
+        if np.size(channel):
+            for i_frame in range(num_frames):
+                i_array = i_frame * frame_length
                 if count >= stop:
                     count = 0
-                    progress = (j + (length - samples_left) / length) / num_channels
-                    x = (yield progress, channels)
+                    progress = (j + i_frame / num_frames) / num_channels
+                    x = (yield progress, channels[:,:length])
                     if x is not None:
                         stop = stop * x
                 count += 1
-
-                current_frame_length = min(frame_length, samples_left) 
                 i = stream.read(audio.coders.rice(3, signed=False))
                 n = stream.read(np.uint8)
-                delta = stream.read(audio.coders.rice(n, signed=True), current_frame_length)
+                delta = stream.read(audio.coders.rice(n, signed=True), frame_length)
                 delta = np.array(delta, dtype=np.int32)
                 for _ in range(i):
                     delta = np.cumsum(delta)
-                channel = np.r_[channel, delta]
-                samples_left -= current_frame_length
-            channels[j] = channel
+                channel[i_array:i_array+frame_length] = delta 
     assert all(np.r_[stream.read(bool, len(stream))] == False)
-    yield (1.0, channels)
+    yield (1.0, channels[:,:length])
 
 doc ="polynomial pred. residual rice coder within frames"
 register(4, "v4", shrink_v4, grow_v4, doc)
@@ -581,11 +575,19 @@ Test that shrink + grow achieves perfect reconstruction.
     ...             [-2**15, -2**15+1, -2, -1, 0, 1, 2**15 -2, 2**15 - 1], 
     ...             [[-2**15, 0, 2**15-1], [0, 1, 2]],
     ...           ]
+    >>> import numpy as np
+    >>> dt = 1.0 / 44100.0
+    >>> t = np.r_[0.0:1.0:dt]
+    >>> f = 440.0
+    >>> data = np.round(np.cos(2*np.pi*f*t)).astype(np.int16)
+    >>> dataset.append(data)
+    >>> dataset.append([data, data])
+
     >>> def check_round_trip(shrink, grow):
     ...     checks =  []
     ...     for data in dataset:
     ...         checks.append((data == grow(shrink(data))).all())
-    ...     return all(checks) 
+    ...     return all(checks)
 
     >>> check_round_trip(shrink_v0, grow_v0)
     True
