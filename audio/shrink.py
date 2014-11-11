@@ -393,6 +393,7 @@ def shrink_v4(channels, N=14, frame_length=882):
             frames = audio.frames.split(channel, frame_length, pad=True)
             tail = length % frame_length
             for i_frame, frame in enumerate(frames):
+                # TODO: stop the handling of the last frame, pad with zeros
                 last_frame = (i_frame == len(frames) - 1)
                 if count >= stop:
                     count = 0
@@ -462,7 +463,7 @@ register(4, "v4", shrink_v4, grow_v4, doc)
 # ------------------------------------------------------------------------------
 #
 @log_ETA
-def shrink_v5(channels, N=14, frame_length=882): # 882 = 20 ms
+def shrink_v5(channels, N=14, frame_length=882):
     channels = np.array(channels, ndmin=2)
     logfile.debug("beginning coding")
     stream = audio.bitstream.BitStream()
