@@ -430,6 +430,7 @@ def grow_v4(stream, N=14, frame_length=882):
     for j in range(num_channels):
         channel = channels[j]
         if np.size(channel):
+            channel = np.array(channel, dtype=np.int32)
             for i_frame in range(num_frames):
                 i_array = i_frame * frame_length
                 if count >= stop:
@@ -442,10 +443,11 @@ def grow_v4(stream, N=14, frame_length=882):
                 i = stream.read(audio.coders.rice(3, signed=False))
                 n = stream.read(np.uint8)
                 delta = stream.read(audio.coders.rice(n, signed=True), frame_length)
+                #print i, n, delta
                 delta = np.array(delta, dtype=np.int32)
                 for _ in range(i):
                     delta = np.cumsum(delta)
-                channel[i_array:i_array+frame_length] = delta 
+                channels[j][i_array:i_array+frame_length] = delta 
     assert all(np.r_[stream.read(bool, len(stream))] == False)
     yield (1.0, channels[:,:length])
 
@@ -459,96 +461,90 @@ register(4, "v4", shrink_v4, grow_v4, doc)
 @log_ETA
 def shrink_v5(channels, N=14, frame_length=882):
     channels = np.array(channels, ndmin=2)
-    logfile.debug("beginning coding")
     stream = audio.bitstream.BitStream()
     stream.write("SHRINK")
     version = 5
     stream.write(version, np.uint8)
-    length = shape(channels)[1]
+    length = np.shape(channels)[1]
     stream.write(length, np.uint32)
     stereo = (np.shape(channels)[0] == 2)
     stream.write(stereo)
     count, stop = 0, 1
     for i_channel, channel in enumerate(channels):
         if np.size(channel) > 0:
-            # Jeeez, with the new (restricted) audio.frames.split, I have
-            # to think again about the last frame.
-            # Uhu, why N+1 ? N should be enough, ennit ?
+            channel = np.array(channel, dtype=np.int32)
             frames = audio.frames.split(\
-                       np.r_[zeros(N+1, dtype=np.int16), channel], 
+                       np.r_[np.zeros(N + 1, dtype=np.int32), channel], 
                        frame_length = frame_length + N + 1, 
-                       overlap = N + 1)
+                       overlap = N + 1,
+                       pad=True)
             for i_frame, frame in enumerate(frames):
                 if count >= stop:
                     count = 0
-                    c_progress = float(i_channel) / len(channels)
-                    f_progress = float(i_frame) / len(frames)
-                    x = (yield c_progress + f_progress / len(channels))
-                    stop = stop * x
+                    progress = (i_channel + i_frame / len(frames)) / len(channels)
+                    x = (yield progress, stream)
+                    if x is not None:
+                        stop = stop * x
                 count += 1
-
-                mean_ = mean(abs(frame[N+1:]))
+                codec = audio.coders.rice.from_frame(frame, signed=True)
                 i = 0
                 while i <= N:
-                    delta = diff(frame)
-                    new_mean = mean(abs(delta[N-i:]))
-                    if new_mean >= mean_:
+                    delta = np.diff(frame)
+                    new_codec = audio.coders.rice.from_frame(delta[N-i:], signed=True)
+                    if new_codec.n >= codec.n:
                         break
                     else:
-                        mean_ = new_mean
+                        codec = new_codec
                         frame = delta
                     i += 1
-
-                stream.write(i, rice(3))
-                n = rice.select_parameter(mean_)
-                stream.write(n, uint8)
-                stream.write(frame[N-i+1:], rice(n, signed=True))
+                stream.write(i, audio.coders.rice(3, signed=False))
+                stream.write(codec.n, np.uint8)
+                stream.write(frame[N+1-i:], codec)
     byte_pad(stream)
-    logfile.debug("ending coding")
     yield (1.0, stream)
 
 @log_ETA
 def grow_v5(stream, N=14, frame_length=882):
     assert stream.read(str, 6) == "SHRINK"
-    assert stream.read(uint8) == 5
-    length = stream.read(uint32)
+    assert stream.read(np.uint8) == 5
+    length = stream.read(np.uint32)
     num_channels = stream.read(bool) + 1
-    channels = zeros((num_channels, length), dtype=int16)
+    num_frames = (length // frame_length) + (length % frame_length != 0)
+    pad = num_frames * frame_length - length
+    channels = np.zeros((num_channels, length + pad), dtype=np.int16)
     count, stop = 0, 1
     for j in range(num_channels):
-        if size(channels[j]) > 0:
-            channel = None
-            samples_left = length
-            while samples_left:
+        if np.size(channels):
+            channel = np.zeros((0,), dtype=np.int16)
+            for i_frame in range(num_frames):
+                i_array = i_frame * frame_length
                 if count >= stop:
                     count = 0
-                    progress  = float(j) / num_channels
-                    progress += float(length - samples_left) / length / num_channels
-                    x = (yield progress)
-                    stop = stop * x
+                    progress = (j + i_frame / num_frames) / num_channels
+                    x = (yield progress, channels[:,:length])
+                    if x is not None:
+                        stop = stop * x
                 count += 1
-
-                current_frame_length = min(frame_length, samples_left) 
-                i = stream.read(rice(3)) # i = poly. order + 1
-                if channel is None:
-                    channel = zeros(i, dtype=uint16)
-                    offset = i 
-                n = stream.read(uint8)
-                delta = stream.read(rice(n, signed=True), current_frame_length)
-                delta = array(delta, dtype=int16)
+                i = stream.read(audio.coders.rice(3, signed=False))
+                n = stream.read(np.uint8)
+                delta = stream.read(audio.coders.rice(n, signed=True), frame_length)
+                delta = np.array(delta, dtype=np.int32)
                 sum_offset = []
                 if i > 0:
-                    start = channel[-i:]
+                    if np.size(channel):
+                        start = channel[-i:].astype(np.int32)
+                    else:
+                        start = np.zeros((i,), dtype=np.int32)
                     for k in range(i):
                        sum_offset.insert(0, start[-1])
-                       start = diff(start)
+                       start = np.diff(start)
                     for k in range(i):
-                        delta = cumsum(delta) + sum_offset[k]
-                channel = r_[channel, delta]
-                samples_left -= current_frame_length
-            channels[j] = channel[offset:]
-    assert all(r_[stream.read(bool, len(stream))] == False)
-    yield (1.0, channels)
+                        delta = np.cumsum(delta) + sum_offset[k]
+                channel = np.r_[channel, delta]
+
+            channels[j] = channel[:length+pad]
+    assert all(np.r_[stream.read(bool, len(stream))] == False)
+    yield (1.0, channels[:,:length])
 
 doc ="polynomial pred. residual rice coder within overlapping frames"
 register(5, "v5", shrink_v5, grow_v5, doc)
