@@ -145,6 +145,35 @@ def test_grow_v4():
     >>> audio.shrink.grow_v4(stream)
 """
 
+def test_shrink_v5():
+    """
+    >>> import audio.shrink
+    >>> import audio.wave
+    >>> import numpy as np
+    >>> dt = 1.0 / 44100.0
+    >>> f = 440.0
+    >>> T = 1.0
+    >>> t = np.r_[0.0:T:dt]
+    >>> data = np.cos(2.0 * np.pi * f * t)
+    >>> data = audio.wave.read(audio.wave.write(data), scale=False)
+    >>> stream = audio.shrink.shrink_v5(data)
+"""
+
+def test_grow_v5():
+    """
+    >>> import audio.shrink
+    >>> import audio.wave
+    >>> import numpy as np
+    >>> dt = 1.0 / 44100.0
+    >>> f = 440.0
+    >>> T = 1.0
+    >>> t = np.r_[0.0:T:dt]
+    >>> data = np.cos(2.0 * np.pi * f * t)
+    >>> data = audio.wave.read(audio.wave.write(data), scale=False)
+    >>> stream = audio.shrink.shrink_v5(data)
+    >>> audio.shrink.grow_v5(stream)
+"""
+
 
 if __name__ == "__main__":
     import docbench

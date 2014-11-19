@@ -2,7 +2,7 @@
 # coding: utf-8
 
 """
-SHRINK Lossless Audio Codec
+SHRINK Lossless Audio rice_tag
 """
 
 # Python 2.7 Standard Library
@@ -51,21 +51,21 @@ import logfile
 from .about_shrink import *
 
 #
-# Codecs Registration
+# rice_tags Registration
 # ------------------------------------------------------------------------------
 #
 class struct(object):
     def __init__(self, **kwargs):
         self.__dict__.update(kwargs)
 
-_codecs = {}
+_rice_tags = {}
 
 def register(id, name, coder, decoder, doc=None):
     """
-    Register a SHRINK codec pair by id (number) and name.
+    Register a SHRINK rice_tag pair by id (number) and name.
     """
     info = struct(id=id, name=name, coder=coder, decoder=decoder, doc=doc)
-    _codecs[id] = _codecs[name] = info
+    _rice_tags[id] = _rice_tags[name] = info
 
 #
 # Breakpoint Handler and Decorator
@@ -106,13 +106,13 @@ def shrink_v0(channels):
     stream.write(stereo)
     for i_channel, channel in enumerate(channels):
         if np.size(channel):
-            codec = audio.coders.rice.from_frame(channel, signed=True)
-            stream.write(codec.n, np.uint8)
+            rice_tag = audio.coders.rice.from_frame(channel, signed=True)
+            stream.write(rice_tag.b, np.uint8)
             i = 0
             count, stop = 0, 1
             while i < length:
                 i_next = min(i + 4410, length)
-                stream.write(channel[i:i_next], codec)
+                stream.write(channel[i:i_next], rice_tag)
                 i = i_next
                 if count >= stop:
                     count = 0
@@ -133,13 +133,13 @@ def grow_v0(stream):
     channels = np.zeros((num_channels, length), dtype=np.int16)
     if np.size(channels):        
         for i_channel in range(num_channels):
-            n = stream.read(np.uint8)
-            codec = audio.coders.rice(n, signed=True)
+            b = stream.read(np.uint8)
+            rice_tag = audio.coders.rice(b=b, signed=True)
             i = 0
             count, stop = 0, 1
             while i < length:
                 i_next = min(i + 4410, length)
-                channels[i_channel][i:i_next] = stream.read(codec, i_next - i)
+                channels[i_channel][i:i_next] = stream.read(rice_tag, i_next - i)
                 i = i_next
                 if count >= stop:
                     count = 0
@@ -173,8 +173,8 @@ def shrink_v1(channels):
         if np.size(channel):
             channel = np.array(channel, dtype=np.int32)
             delta = np.diff(np.r_[0, channel])
-            codec = audio.coders.rice.from_frame(delta, signed=True)
-            stream.write(codec.n, np.uint8)
+            rice_tag = audio.coders.rice.from_frame(delta, signed=True)
+            stream.write(rice_tag.b, np.uint8)
             i = 0
             while i < length:
                 if count >= stop:
@@ -185,7 +185,7 @@ def shrink_v1(channels):
                         stop = stop * x
                 count += 1
                 i_next = min(i + 4410, length)
-                stream.write(delta[i:i_next], codec)
+                stream.write(delta[i:i_next], rice_tag)
                 i = i_next
     byte_pad(stream)
     yield (1.0, stream)
@@ -200,8 +200,8 @@ def grow_v1(stream):
     count, stop = 0, 1
     for i in range(num_channels):
         if np.size(channels[i]):
-            n = stream.read(np.uint8)
-            codec = audio.coders.rice(n, signed=True)
+            b = stream.read(np.uint8)
+            rice_tag = audio.coders.rice(b=b, signed=True)
             delta = np.zeros(length, dtype=np.int32)
             j = 0
             while j < length:
@@ -213,7 +213,7 @@ def grow_v1(stream):
                         stop = stop * x
                 count += 1
                 j_next = min(j + 4410, length)  
-                delta[j:j_next] = stream.read(codec, j_next - j)
+                delta[j:j_next] = stream.read(rice_tag, j_next - j)
                 j = j_next
             channels[i] = np.cumsum(delta)
     assert all(np.r_[stream.read(bool, len(stream))] == False)
@@ -241,8 +241,8 @@ def shrink_v2(channels):
         if np.size(channel):
             channel = np.array(channel, dtype=np.int32)
             delta = np.diff(np.r_[0, np.diff(np.r_[0, channel])])
-            codec = audio.coders.rice.from_frame(delta, signed=True)
-            stream.write(codec.n, np.uint8)
+            rice_tag = audio.coders.rice.from_frame(delta, signed=True)
+            stream.write(rice_tag.b, np.uint8)
             i = 0
             while i < length:
                 if count >= stop:
@@ -253,7 +253,7 @@ def shrink_v2(channels):
                         stop = stop * x
                 count += 1
                 i_next = min(i + 4410, length) 
-                stream.write(delta[i:i_next], codec)
+                stream.write(delta[i:i_next], rice_tag)
                 i = i_next
     byte_pad(stream)
     yield (1.0, stream)
@@ -269,7 +269,7 @@ def grow_v2(stream):
     for i in range(num_channels):
         if np.size(channels[i]):
             n = stream.read(np.uint8)
-            codec = audio.coders.rice(n, signed=True)
+            rice_tag = audio.coders.rice(n, signed=True)
             delta = np.zeros(length, dtype=np.int32)
             j = 0
             while j < length:
@@ -281,7 +281,7 @@ def grow_v2(stream):
                         stop = stop * x
                 count += 1
                 j_next = min(j + 4410, length) 
-                delta[j:j_next] = stream.read(codec, j_next - j)
+                delta[j:j_next] = stream.read(rice_tag, j_next - j)
                 j = j_next
             channels[i] = np.cumsum(np.cumsum(delta))
     assert all(np.r_[stream.read(bool, len(stream))] == False)
@@ -309,19 +309,19 @@ def shrink_v3(channels, N=14):
     for i_channel, channel in enumerate(channels):
         if np.size(channels):
             channel = np.array(channel, dtype=np.int32)
-            codec = audio.coders.rice.from_frame(channel, signed=True)
+            rice_tag = audio.coders.rice.from_frame(channel, signed=True)
             i = 0
             while i <= N:
                 delta = np.diff(np.r_[0, channel])
-                new_codec = audio.coders.rice.from_frame(delta, signed=True)
-                if new_codec.n >= codec.n:
+                new_rice_tag = audio.coders.rice.from_frame(delta, signed=True)
+                if new_rice_tag.b >= rice_tag.b:
                     break
                 else:
-                    codec = new_codec
+                    rice_tag = new_rice_tag
                     channel = delta
                     i += 1
             stream.write(i, audio.coders.rice(3, signed=False))
-            stream.write(codec.n, np.uint8)
+            stream.write(rice_tag.b, np.uint8)
             j = 0
             while j < length:
                 if count >= stop:
@@ -332,7 +332,7 @@ def shrink_v3(channels, N=14):
                         stop = x * stop
                 count += 1
                 j_next = min(j + 4410, length)        
-                stream.write(channel[j:j_next], codec)
+                stream.write(channel[j:j_next], rice_tag)
                 j = j_next
     byte_pad(stream)
     yield (1.0, stream)
@@ -349,7 +349,7 @@ def grow_v3(stream):
         if np.size(channels[j]):
             i = stream.read(audio.coders.rice(3, signed=False))
             n = stream.read(np.uint8)
-            codec = audio.coders.rice(n, signed=True)
+            rice_tag = audio.coders.rice(n, signed=True)
             delta = np.zeros(length, dtype=np.int32)
             k = 0
             while k < length:
@@ -361,7 +361,7 @@ def grow_v3(stream):
                         stop = stop * x
                 count += 1
                 k_next = min(k + 4410, length)
-                delta[k:k_next] = stream.read(codec, k_next - k)
+                delta[k:k_next] = stream.read(rice_tag, k_next - k)
                 k = k_next
             for _ in range(i):
                 delta = np.cumsum(delta)
@@ -400,20 +400,20 @@ def shrink_v4(channels, N=14, frame_length=882):
                     if x is not None:
                         stop = stop * x                
                 count += 1
-                codec = audio.coders.rice.from_frame(frame, signed=True)
+                rice_tag = audio.coders.rice.from_frame(frame, signed=True)
                 i = 0
                 while i <= N:
                     delta = np.diff(np.r_[0, frame])
-                    new_codec = audio.coders.rice.from_frame(delta, signed=True)
-                    if new_codec.n >= codec.n:
+                    new_rice_tag = audio.coders.rice.from_frame(delta, signed=True)
+                    if new_rice_tag.b >= rice_tag.b:
                         break
                     else:
-                        codec = new_codec
+                        rice_tag = new_rice_tag
                         frame = delta
                     i += 1
                 stream.write(i, audio.coders.rice(3, signed=False))
-                stream.write(codec.n, np.uint8)
-                stream.write(frame, codec)
+                stream.write(rice_tag.b, np.uint8)
+                stream.write(frame, rice_tag)
     byte_pad(stream)
     yield (1.0, stream)
 
@@ -486,20 +486,20 @@ def shrink_v5(channels, N=14, frame_length=882):
                     if x is not None:
                         stop = stop * x
                 count += 1
-                codec = audio.coders.rice.from_frame(frame, signed=True)
+                rice_tag = audio.coders.rice.from_frame(frame, signed=True)
                 i = 0
                 while i <= N:
                     delta = np.diff(frame)
-                    new_codec = audio.coders.rice.from_frame(delta[N-i:], signed=True)
-                    if new_codec.n >= codec.n:
+                    new_rice_tag = audio.coders.rice.from_frame(delta[N-i:], signed=True)
+                    if new_rice_tag.b >= rice_tag.b:
                         break
                     else:
-                        codec = new_codec
+                        rice_tag = new_rice_tag
                         frame = delta
                     i += 1
                 stream.write(i, audio.coders.rice(3, signed=False))
-                stream.write(codec.n, np.uint8)
-                stream.write(frame[N+1-i:], codec)
+                stream.write(rice_tag.b, np.uint8)
+                stream.write(frame[N+1-i:], rice_tag)
     byte_pad(stream)
     yield (1.0, stream)
 
@@ -558,7 +558,7 @@ def test_round_trip():
 Test that shrink + grow achieves perfect reconstruction.
 
     TODO: I would need much longer dataset to really stress-test framed
-          version of the codecs.
+          version of the rice_tags.
 
     >>> dataset = [ 
     ...             [], 
@@ -607,7 +607,7 @@ Test that shrink + grow achieves perfect reconstruction.
 def main():
     "Command-Line Entry Point"
 
-    description = "SHRINK Lossless Audio Codec"
+    description = "SHRINK Lossless Audio rice_tag"
     parser = argparse.ArgumentParser(description=description)
     parser.add_argument("filename", nargs="?", type=str,
                          help = "filename (WAVE or SHRINK file")
@@ -619,11 +619,11 @@ def main():
                         action  = "count", 
                         default = 0,
                         help    = "display less information")
-    parser.add_argument("-c", "--codec",
+    parser.add_argument("-c", "--rice_tag",
                         type = str,
-                        help = "select a codec (by id or name)")
+                        help = "select a rice_tag (by id or name)")
     parser.add_argument("-l", "--list", action="store_true",
-                        help = "list available codecs")
+                        help = "list available rice_tags")
     args = parser.parse_args()
 
     verbosity = args.verbose - args.silent
@@ -634,27 +634,27 @@ def main():
     logfile.config.format = format
 
     if args.list:
-        ids = sorted([key for key in _codecs if isinstance(key, int)])
-        print "SHRINK codecs"
+        ids = sorted([key for key in _rice_tags if isinstance(key, int)])
+        print "SHRINK rice_tags"
         print "----------------------------------------------------------------"
         print "id name         description"
         print "-- ------------ ------------------------------------------------"
         for id in ids:
-            info = _codecs[id]
+            info = _rice_tags[id]
             layout = "{0:>2} {1:<12} {2:<48}" 
             print layout.format(info.id, info.name, info.doc or "")
         sys.exit(0)
 
-    codec = args.codec
-    if codec:
+    rice_tag = args.rice_tag
+    if rice_tag:
         try:
-            codec = int(codec)
+            rice_tag = int(rice_tag)
         except ValueError:
             pass
         try:
-            codec = _codecs[codec]
+            rice_tag = _rice_tags[rice_tag]
         except KeyError:
-            sys.exit("error: codec {0!r} not found".format(codec_key))
+            sys.exit("error: rice_tag {0!r} not found".format(rice_tag_key))
 
     filename = args.filename
     if filename is None:
@@ -667,10 +667,10 @@ def main():
         extension = parts[-1]
 
     if extension == "wav":
-        if codec is None:
-            id = max([id for id in _codecs if isinstance(id, int)])
-            codec = _codecs[id]
-        coder = codec.coder
+        if rice_tag is None:
+            id = max([id for id in _rice_tags if isinstance(id, int)])
+            rice_tag = _rice_tags[id]
+        coder = rice_tag.coder
 
         channels = audio.wave.read(filename, scale=False)
         if len(np.shape(channels)) == 1:
@@ -688,10 +688,10 @@ def main():
             logfile.info("file with valid shrink format")
         id = header.read(np.uint8)
         logfile.info("file encoded with shrink protocol {id}")
-        if codec and codec.id != id:
+        if rice_tag and rice_tag.id != id:
              error = "file encoded with shrink coder {0}"
              raise ValueError(error.format(id))
-        decoder = _codecs[id].decoder
+        decoder = _rice_tags[id].decoder
         channels = decoder(stream)
         audio.wave.write(channels, output=basename + ".wav")
     else:
