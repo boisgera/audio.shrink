@@ -2,7 +2,7 @@
 # coding: utf-8
 
 """
-SHRINK Lossless Audio rice_tag
+SHRINK Lossless Audio coder
 """
 
 # Python 2.7 Standard Library
@@ -51,21 +51,21 @@ import logfile
 from .about_shrink import *
 
 #
-# rice_tags Registration
+# Coders Registration
 # ------------------------------------------------------------------------------
 #
 class struct(object):
     def __init__(self, **kwargs):
         self.__dict__.update(kwargs)
 
-_rice_tags = {}
+_coders = {}
 
 def register(id, name, coder, decoder, doc=None):
     """
-    Register a SHRINK rice_tag pair by id (number) and name.
+    Register a SHRINK coder pair by id (number) and name.
     """
     info = struct(id=id, name=name, coder=coder, decoder=decoder, doc=doc)
-    _rice_tags[id] = _rice_tags[name] = info
+    _coders[id] = _coders[name] = info
 
 #
 # Breakpoint Handler and Decorator
@@ -607,7 +607,7 @@ Test that shrink + grow achieves perfect reconstruction.
 def main():
     "Command-Line Entry Point"
 
-    description = "SHRINK Lossless Audio rice_tag"
+    description = "SHRINK Lossless Audio coder"
     parser = argparse.ArgumentParser(description=description)
     parser.add_argument("filename", nargs="?", type=str,
                          help = "filename (WAVE or SHRINK file")
@@ -619,11 +619,11 @@ def main():
                         action  = "count", 
                         default = 0,
                         help    = "display less information")
-    parser.add_argument("-c", "--rice_tag",
+    parser.add_argument("-c", "--coder",
                         type = str,
                         help = "select a rice_tag (by id or name)")
     parser.add_argument("-l", "--list", action="store_true",
-                        help = "list available rice_tags")
+                        help = "list available coders")
     args = parser.parse_args()
 
     verbosity = args.verbose - args.silent
@@ -634,27 +634,27 @@ def main():
     logfile.config.format = format
 
     if args.list:
-        ids = sorted([key for key in _rice_tags if isinstance(key, int)])
-        print "SHRINK rice_tags"
+        ids = sorted([key for key in _coders if isinstance(key, int)])
+        print "SHRINK coders"
         print "----------------------------------------------------------------"
         print "id name         description"
         print "-- ------------ ------------------------------------------------"
         for id in ids:
-            info = _rice_tags[id]
+            info = _coders[id]
             layout = "{0:>2} {1:<12} {2:<48}" 
             print layout.format(info.id, info.name, info.doc or "")
         sys.exit(0)
 
-    rice_tag = args.rice_tag
-    if rice_tag:
+    rice_tag = args.coder
+    if coder:
         try:
-            rice_tag = int(rice_tag)
+            coder = int(coder)
         except ValueError:
             pass
         try:
-            rice_tag = _rice_tags[rice_tag]
+            coder = _coders[coder]
         except KeyError:
-            sys.exit("error: rice_tag {0!r} not found".format(rice_tag_key))
+            sys.exit("error: coder {0!r} not found".format(coder_key))
 
     filename = args.filename
     if filename is None:
@@ -667,10 +667,10 @@ def main():
         extension = parts[-1]
 
     if extension == "wav":
-        if rice_tag is None:
-            id = max([id for id in _rice_tags if isinstance(id, int)])
-            rice_tag = _rice_tags[id]
-        coder = rice_tag.coder
+        if coder is None:
+            id = max([id for id in _coders if isinstance(id, int)])
+            coder = _coders[id]
+        coder = coder.coder
 
         channels = audio.wave.read(filename, scale=False)
         if len(np.shape(channels)) == 1:
@@ -688,10 +688,10 @@ def main():
             logfile.info("file with valid shrink format")
         id = header.read(np.uint8)
         logfile.info("file encoded with shrink protocol {id}")
-        if rice_tag and rice_tag.id != id:
+        if coder and coder.id != id:
              error = "file encoded with shrink coder {0}"
              raise ValueError(error.format(id))
-        decoder = _rice_tags[id].decoder
+        decoder = _coders[id].decoder
         channels = decoder(stream)
         audio.wave.write(channels, output=basename + ".wav")
     else:
