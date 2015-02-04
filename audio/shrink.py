@@ -607,7 +607,7 @@ Test that shrink + grow achieves perfect reconstruction.
 def main():
     "Command-Line Entry Point"
 
-    description = "SHRINK Lossless Audio coder"
+    description = "SHRINK Lossless Audio Coder"
     parser = argparse.ArgumentParser(description=description)
     parser.add_argument("filename", nargs="?", type=str,
                          help = "filename (WAVE or SHRINK file")
@@ -635,7 +635,7 @@ def main():
 
     if args.list:
         ids = sorted([key for key in _coders if isinstance(key, int)])
-        print "SHRINK coders"
+        print "SHRINK Coders"
         print "----------------------------------------------------------------"
         print "id name         description"
         print "-- ------------ ------------------------------------------------"
