@@ -645,7 +645,7 @@ def main():
             print layout.format(info.id, info.name, info.doc or "")
         sys.exit(0)
 
-    rice_tag = args.coder
+    coder = args.coder
     if coder:
         try:
             coder = int(coder)
